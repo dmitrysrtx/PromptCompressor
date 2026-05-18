@@ -138,3 +138,7 @@ dmypy.json
 .idea/
 cluster_utils/
 **/wandb/
+
+#Models
+models--gpt2-xl/*
+gpt2-xl-finetuned/*
