@@ -39,9 +39,11 @@ def train(train_file_path,
 
     training_args = TrainingArguments(
             output_dir=output_dir,
-            per_device_train_batch_size=4,
-            gradient_accumulation_steps=2,
+            per_device_train_batch_size=1,
+            gradient_accumulation_steps=8,
             num_train_epochs=3,
+            max_steps=50,
+            fp16=True,
         )
 
     trainer = Trainer(
