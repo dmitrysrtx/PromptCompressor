@@ -34,7 +34,6 @@ pip install stable-baselines3==1.8.0 --no-use-pep517
 
 echo "📚 Шаг 6: Устанавливаем requirements.txt (это займет пару минут)..."
 pip install -r requirements.txt
-pip install --upgrade wandb
 
 # 3. Подгружаем секретный API-ключ из файла .env (если он существует)
 if [ -f ".env" ]; then

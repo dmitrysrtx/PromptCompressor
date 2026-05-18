@@ -44,6 +44,8 @@ def train(train_file_path,
             num_train_epochs=3,
             max_steps=50,
             fp16=True,
+            gradient_checkpointing=True,
+            optim="adamw_bnb_8bit",
         )
 
     trainer = Trainer(
