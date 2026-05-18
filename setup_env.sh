@@ -1,5 +1,14 @@
 #!/bin/bash
 
+echo "🚀 Начинаем настройку окружения..."
+
+# 1. Жестко прописываем настройки Git (чтобы не просил каждый раз)
+git config --global user.email "dima.strizhak@gmail.com"
+git config --global user.name "dmitrysrtx"
+echo "✅ Git настроен"
+
+
+# 2. RL-окружение (Python 3.9)
 echo "==============================================="
 echo "🚀 Начинаем сборку RL-окружения (Python 3.9)..."
 echo "==============================================="
@@ -25,6 +34,15 @@ pip install stable-baselines3==1.8.0 --no-use-pep517
 
 echo "📚 Шаг 6: Устанавливаем requirements.txt (это займет пару минут)..."
 pip install -r requirements.txt
+pip install --upgrade wandb
+
+# 3. Подгружаем секретный API-ключ из файла .env (если он существует)
+if [ -f ".env" ]; then
+    export $(cat .env | xargs)
+    echo "✅ Секреты (W&B API Key) успешно загружены"
+else
+    echo "⚠️ Файл .env не найден! Авторизация W&B может не сработать."
+fi
 
 echo "==============================================="
 echo "✅ ГОТОВО! Окружение успешно собрано."
