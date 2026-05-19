@@ -2,6 +2,8 @@ from datasets import load_dataset
 from transformers import AutoTokenizer, GPT2LMHeadModel
 from transformers import DataCollatorForLanguageModeling
 from transformers import Trainer, TrainingArguments
+import os
+from transformers.trainer_utils import get_last_checkpoint
 
 
 def load_data_collator(tokenizer, mlm = False):
@@ -46,6 +48,9 @@ def train(train_file_path,
             fp16=True,
             gradient_checkpointing=True,
             optim="adamw_bnb_8bit",
+            save_strategy="steps", # Saves per step
+            save_steps=500,        # backup for each 500 steps
+            save_total_limit=3,    # Keeps last 3 backups(disk space saver)
         )
 
     trainer = Trainer(
@@ -55,7 +60,19 @@ def train(train_file_path,
             train_dataset=train_dataset,
     )
         
-    trainer.train()
+    # Checks if any checkpoint is exist
+    last_checkpoint = None
+    if os.path.isdir(output_dir):
+        last_checkpoint = get_last_checkpoint(output_dir)
+
+    # Starts training by providing the found checkpoint (if exists)
+    if last_checkpoint is not None:
+        print(f"🔄 Found checkpoint: {last_checkpoint}. Continue training!")
+        trainer.train(resume_from_checkpoint=last_checkpoint)
+    else:
+        print("🚀 Start trainig from scratch")
+        trainer.train()
+
     trainer.save_model()
 
 if __name__=="__main__":
