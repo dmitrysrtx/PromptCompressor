@@ -44,7 +44,7 @@ def train(train_file_path,
             per_device_train_batch_size=1,
             gradient_accumulation_steps=8,
             num_train_epochs=3,
-            max_steps=50,
+            # max_steps=50, # For env check only
             fp16=True,
             gradient_checkpointing=True,
             optim="adamw_bnb_8bit",
