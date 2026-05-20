@@ -10,13 +10,16 @@ import numpy as np
 
 
 # PyTorch2.6 patch
-torch.serialization.add_safe_globals([
-    np.core.multiarray._reconstruct,
-    np.ndarray,
-    np.dtype,
-    np.core.multiarray.scalar,
-    np.number
-])
+# Saves an original load function
+_original_load = torch.load
+
+# Wrapper for weights_only=False
+def _trusted_load(*args, **kwargs):
+    kwargs['weights_only'] = False
+    return _original_load(*args, **kwargs)
+
+# Exhange the original function of wrapper
+torch.load = _trusted_load
 
 def load_data_collator(tokenizer, mlm = False):
     data_collator = DataCollatorForLanguageModeling(
