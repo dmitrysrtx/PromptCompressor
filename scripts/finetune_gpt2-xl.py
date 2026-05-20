@@ -10,8 +10,13 @@ import numpy as np
 
 
 # PyTorch2.6 patch
-torch.serialization.add_safe_globals([np.core.multiarray._reconstruct])
-torch.serialization.add_safe_globals([np.ndarray])
+torch.serialization.add_safe_globals([
+    np.core.multiarray._reconstruct,
+    np.ndarray,
+    np.dtype,
+    np.core.multiarray.scalar,
+    np.number
+])
 
 def load_data_collator(tokenizer, mlm = False):
     data_collator = DataCollatorForLanguageModeling(
