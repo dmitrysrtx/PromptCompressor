@@ -2,8 +2,9 @@ from datasets import load_dataset
 from transformers import AutoTokenizer, GPT2LMHeadModel
 from transformers import DataCollatorForLanguageModeling
 from transformers import Trainer, TrainingArguments
-import os
 from transformers.trainer_utils import get_last_checkpoint
+import os
+import wandb
 
 
 def load_data_collator(tokenizer, mlm = False):
@@ -50,7 +51,9 @@ def train(train_file_path,
             optim="adamw_bnb_8bit",
             save_strategy="steps", # Saves per step
             save_steps=500,        # backup for each 500 steps
-            save_total_limit=3,    # Keeps last 3 backups(disk space saver)
+            save_total_limit=1,    # Keeps only the last backup(disk space saver)
+            report_to="wandb",     # Connecting to W&B
+            run_name="gpt2-xl-alpaca-full", # Graph name
         )
 
     trainer = Trainer(
@@ -79,6 +82,28 @@ if __name__=="__main__":
     train_file_path = "data/alpaca_plus.py"
     model_name = "gpt2-xl"
     output_dir = 'gpt2-xl-finetuned'
+
+    os.makedirs(output_dir, exist_ok=True)
+    wandb_id_file = os.path.join(output_dir, "wandb_run_id.txt")
+    
+    last_checkpoint = get_last_checkpoint(output_dir)
+    
+    if last_checkpoint is not None and os.path.exists(wandb_id_file):
+        # Read an old ID and say W&B to continue the session
+        with open(wandb_id_file, "r") as f:
+            run_id = f.read().strip()
+        os.environ["WANDB_RESUME"] = "allow"
+        os.environ["WANDB_RUN_ID"] = run_id
+        print(f"🔗 Stiching W&B graphs! Continue session: {run_id}")
+    else:
+        # If file doesn't exist, create new ID and save it
+        run_id = wandb.util.generate_id()
+        os.environ["WANDB_RESUME"] = "allow"
+        os.environ["WANDB_RUN_ID"] = run_id
+        with open(wandb_id_file, "w") as f:
+            f.write(run_id)
+        print(f"🚀 New W&B session: {run_id}")
+
     train(
         train_file_path=train_file_path,
         model_name=model_name,
