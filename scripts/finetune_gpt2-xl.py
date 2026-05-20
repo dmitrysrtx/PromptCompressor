@@ -5,7 +5,13 @@ from transformers import Trainer, TrainingArguments
 from transformers.trainer_utils import get_last_checkpoint
 import os
 import wandb
+import torch
+import numpy as np
 
+
+# PyTorch2.6 patch
+torch.serialization.add_safe_globals([np.core.multiarray._reconstruct])
+torch.serialization.add_safe_globals([np.ndarray])
 
 def load_data_collator(tokenizer, mlm = False):
     data_collator = DataCollatorForLanguageModeling(
