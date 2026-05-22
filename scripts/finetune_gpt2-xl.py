@@ -64,7 +64,8 @@ def train(train_file_path,
             gradient_checkpointing=True,
             optim="adamw_bnb_8bit",
             save_strategy="steps", # Saves per step
-            save_steps=500,        # backup for each 500 steps
+            save_steps=3500,       # backup for each 3500 steps
+            logging_steps=100,     # logging step of W&B
             save_total_limit=1,    # Keeps only the last backup(disk space saver)
             report_to="wandb",     # Connecting to W&B
             run_name="gpt2-xl-alpaca-full", # Graph name
