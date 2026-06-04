@@ -45,7 +45,8 @@ def train(train_file_path,
         return inputs
 
     train_dataset = load_dataset(train_file_path, split="train")
-    train_dataset = train_dataset.map(concat_instruction_input, batched=False,remove_columns=["instruction","input","output", 'split'], num_proc=8)
+    columns_to_remove = [col for col in train_dataset.column_names if col in ["instruction", "input", "output", "split"]]
+    train_dataset = train_dataset.map(concat_instruction_input, batched=False, remove_columns=columns_to_remove, num_proc=8)
     data_collator = load_data_collator(tokenizer)
 
     tokenizer.save_pretrained(output_dir)
@@ -68,7 +69,7 @@ def train(train_file_path,
             logging_steps=100,     # logging step of W&B
             save_total_limit=1,    # Keeps only the last backup(disk space saver)
             report_to="wandb",     # Connecting to W&B
-            run_name="gpt2-xl-alpaca-full", # Graph name
+            run_name= output_dir + "-full", # Graph name
         )
 
     trainer = Trainer(
@@ -94,9 +95,19 @@ def train(train_file_path,
     trainer.save_model()
 
 if __name__=="__main__":
-    train_file_path = "data/alpaca_plus.py"
-    model_name = "gpt2-xl"
-    output_dir = 'gpt2-xl-finetuned'
+    #dataset = "AlpacePlus"
+    dataset = "CodeAlpaca"
+
+    if dataset == "AlpacePlus":
+        train_file_path = "data/alpaca_plus.py"
+        model_name = "gpt2-xl"
+        output_dir = 'gpt2-xl-finetuned'
+    elif dataset == "CodeAlpaca":
+        train_file_path = "sahil2801/CodeAlpaca-20k"
+        model_name = "gpt2-xl"
+        output_dir = 'gpt2-xl-code-finetuned'
+    else:
+        raise NotImplementedError    
 
     os.makedirs(output_dir, exist_ok=True)
     wandb_id_file = os.path.join(output_dir, "wandb_run_id.txt")

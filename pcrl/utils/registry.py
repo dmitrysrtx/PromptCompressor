@@ -3,7 +3,7 @@ from typing import Any, Dict, Type, Union
 from stable_baselines3.common.off_policy_algorithm import OffPolicyAlgorithm
 from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
 from stable_baselines3.common.policies import BasePolicy
-from data.instruction_pool import DataPool, AlpacaPlus, GPTeacher
+from data.instruction_pool import DataPool, AlpacaPlus, CodeAlpaca, GPTeacher
 from pcrl.algorithms import MaskablePG, MaskableA2C, MaskablePPO
 from pcrl.utils.alg_wrappers import wrap_onpolicy_alg
 from pcrl.utils.metric import (
@@ -20,6 +20,7 @@ from pcrl.model.policy import BatchTokenPolicy
 class DataPoolRegistry:
     _registry = {
         "alpaca_plus": AlpacaPlus,
+        "code_alpaca": CodeAlpaca,
         "gpteacher": GPTeacher,
     }
     @classmethod

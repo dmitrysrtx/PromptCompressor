@@ -187,6 +187,101 @@ class GPTeacher(DataPool):
         pool_instance = cls(samples)
         return pool_instance
 
+class CodeAlpaca(DataPool):
+    
+    @classmethod
+    def prepare(cls, 
+                split: str,
+                num_tokens_to_predict: int,
+                tokenizer: AutoTokenizer,
+                gen_config: dict,):
+        
+        def preprocess(examples):
+            if examples["input"]:
+                source = f"{FIXED_TOKENS['instruction']}{examples['instruction']}{FIXED_TOKENS['input']}{examples['input']}{FIXED_TOKENS['output']}"
+            else:
+                source = f"{FIXED_TOKENS['instruction']}{examples['instruction']}{FIXED_TOKENS['output']}"
+            inputs = tokenizer(source, padding="max_length", max_length=128, truncation=True)
+            inputs = dict(inputs)
+            inputs['text'] = source
+            return inputs
+        
+        nltk.download('stopwords')
+        model_cls = AutoModelForSeq2SeqLM if "t5" in gen_config['model_name'] else AutoModelForCausalLM
+        gen_model = model_cls.from_pretrained(
+            gen_config['model_name'],
+            pad_token_id = tokenizer.pad_token_id,
+            device_map = 'auto'
+        )
+        
+        # 1. Load the raw unified dataset from Hugging Face Hub
+        raw_dataset = load_dataset("sahil2801/CodeAlpaca-20k")["train"]
+        
+        # 2. Programmatically and deterministically partition the single train split 
+        # into 4 distinct sub-splits to fulfill the project pipeline requirements.
+        # Total size: ~20,000 rows. We allocate 2,000 rows for evaluation pools.
+        main_split = raw_dataset.train_test_split(test_size=2000, seed=42)
+        train_pool = main_split["train"] # ~18,022 rows
+        
+        # Split the remaining 2,000 into 1,000 (human) and 1,000 for seen/unseen tracking
+        eval_split = main_split["test"].train_test_split(test_size=1000, seed=42)
+        val_human_pool = eval_split["train"] # 1,000 rows
+        
+        # Split the last 1,000 evenly between validation_seen and validation_unseen
+        sub_val_split = eval_split["test"].train_test_split(test_size=500, seed=42)
+        val_seen_pool = sub_val_split["train"] # 500 rows
+        val_unseen_pool = sub_val_split["test"] # 500 rows
+        
+        # Map the requested runtime split string to our isolated subsets
+        if split == "train":
+            target_dataset = train_pool
+        elif split == "validation_seen":
+            target_dataset = val_seen_pool
+        elif split == "validation_human":
+            target_dataset = val_human_pool
+        elif split == "validation_unseen":
+            target_dataset = val_unseen_pool
+        else:
+            raise ValueError(f"Unknown downstream split request: {split}")
+            
+        # 3. Apply standard tokenization preprocessing and keep the target ground-truth output
+        dataset_split = target_dataset.map(preprocess, remove_columns=["instruction", "input",])
+        
+        # 4. Generate batch predictions using the baseline/SFT generative model
+        bs = 64
+        samples = []
+        with torch.no_grad():
+            for i in tqdm(range(math.ceil(len(dataset_split)/bs))):
+                subset = dataset_split[bs*i:bs*(i+1)]
+                input_ids = torch.tensor(subset['input_ids'])
+                attention_mask = torch.tensor(subset['attention_mask'])
+                gen_output = gen_model.generate(
+                    inputs=input_ids.to("cuda"),
+                    attention_mask=attention_mask.to("cuda"),
+                    **gen_config['generation_kwargs'],
+                )
+                for ix in range(len(subset['output'])):
+                    input_text = tokenizer.decode(input_ids[ix], skip_special_tokens=True)
+                    input_token_counts = len(tokenizer(input_text)['input_ids'])
+                    gen_tokens = gen_output[ix][-num_tokens_to_predict:]
+                    gen_texts = tokenizer.decode(gen_tokens, skip_special_tokens=True)
+                    sample = Sample(
+                        id=f"code_{split}_{bs*i+ix}",
+                        prompt_or_input_text=input_text,
+                        references=subset['output'][ix],
+                        input_token_counts=input_token_counts,
+                        generated_text=gen_texts,
+                    )
+                    samples.append(sample)
+
+                # TODO: Remove or adjust this throttle line when executing production runs
+                if i > 10:
+                    break
+                    
+        pool_instance = cls(samples)
+        torch.cuda.empty_cache()
+        return pool_instance
+
 # class SelfInstruct(DataPool):
     
 #     @classmethod
