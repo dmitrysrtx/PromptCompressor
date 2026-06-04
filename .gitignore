@@ -142,3 +142,6 @@ cluster_utils/
 #Models
 models--gpt2-xl/*
 gpt2-xl-finetuned/*
+
+# Running logs
+PromptCompressor_RL/
