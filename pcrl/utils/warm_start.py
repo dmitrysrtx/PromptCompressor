@@ -56,6 +56,8 @@ class MaskableActorCriticWarmStartMixin:
             self._value_model.load_state_dict(state_dict["value_model"])
             # self._value_head.load_state_dict(state_dict["value_head"])
             self.optimizer.load_state_dict(state_dict["optimizer"])
+            self._mask_model.load_state_dict(state_dict["mask_model"])
+
 
 
 ################## Algorithm Warm Start Mixins#######################################

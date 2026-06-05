@@ -57,11 +57,16 @@ def train(train_file_path,
 
     training_args = TrainingArguments(
             output_dir=output_dir,
-            per_device_train_batch_size=1,
-            gradient_accumulation_steps=8,
+            per_device_train_batch_size=16,
+            gradient_accumulation_steps=2,
             num_train_epochs=3,
             # max_steps=50, # For env check only
             fp16=True,
+            tf32=True,
+
+            learning_rate=2.4e-5,
+            weight_decay=0.01,     # Loss function correction optimizer to avoid large waight values - lowering for 1% from orig value
+
             gradient_checkpointing=True,
             optim="adamw_bnb_8bit",
             save_strategy="steps", # Saves per step
