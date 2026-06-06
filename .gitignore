@@ -145,3 +145,4 @@ gpt2-xl-finetuned/*
 
 # Running logs
 PromptCompressor_RL/
+PromptCompressor_code_RL/

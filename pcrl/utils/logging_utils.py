@@ -68,6 +68,19 @@ class Tracker:
         logging.getLogger("transformers").setLevel(logging.WARNING)
         logging.getLogger("datasets").setLevel(logging.WARNING)
 
+        import datasets
+        import transformers
+        import evaluate
+        
+        # Disable progress bar "Map: 100%|██████████|"
+        datasets.disable_progress_bar()
+        
+        # transformenrs to critical only output
+        transformers.logging.set_verbosity_error()
+        
+        # Disable progress bar in evaluate library (ROUGE/METEOR)
+        evaluate.disable_progress_bar()
+
         if self._wandb_log:
             self._wandb_run = wandb.init(
                 entity=self._entity_name,

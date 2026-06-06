@@ -185,7 +185,7 @@ class OnPolicyTrainer(TrainerWarmStartMixin):
                                 gen_kwargs=self._eval_gen_kwargs)
         time.sleep(10)
 
-def train_and_eval(self):
+    def train_and_eval(self):
         iter_start = self._trainer_state["current_iter"]
         # self._evaluate_on_datapools(epoch=iter_start)
 

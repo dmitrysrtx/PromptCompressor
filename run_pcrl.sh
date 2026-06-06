@@ -20,8 +20,8 @@ echo "🚀 Запуск PCRL в полностью изолированном а
 # 4. Активируем виртуальную среду и запускаем Python напрямую
 source /content/env39/bin/activate
 
-python -u train_pcrl.py \
+python train_pcrl.py \
     --config_path configs/gpt2-xl-code.yml \
     --project_name PromptCompressor_code_RL \
-    --experiment_name gpt2_xl_code_scst_isolated \
+    --experiment_name gpt2_xl_code_v3_n32 \
     --log_to_wandb

@@ -25,11 +25,11 @@ datapool:
     num_tokens_to_predict: 30
 
 env:
-  n_envs: 4
+  n_envs: 16
   obs_space: FixedTokenObservation
   act_space: BatchFixedTokenAction
   args:
-    max_prompt_length: 128
+    max_prompt_length: 256
     max_episode_length: 1
     terminate_on_eos: True
 
@@ -41,11 +41,11 @@ alg:
     n_steps: 1
     gae_lambda: 1
     gamma: 1
-    batch_size: 32
+    batch_size: 64
     verbose: 1
     learning_rate: 0.00003
     normalize_advantage: false
-    ent_coef: 0.001
+    ent_coef: 0.01
 
   policy:
     id: BatchTokenPolicy
@@ -54,11 +54,11 @@ alg:
       lr_scheduler:
 
 train_evaluation:
-  eval_batch_size: 32
-  n_iters: 4
+  eval_batch_size: 64
+  n_iters: 20
   save_every: 1
   eval_freq: 100000000 # deprecated
   generation_kwargs:
     do_sample: False
     min_new_tokens: 1
-    max_new_tokens: 128
+    max_new_tokens: 256
