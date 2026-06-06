@@ -1,4 +1,5 @@
 from typing import Any, Dict, List
+from tqdm import tqdm
 from transformers import AutoTokenizer
 from data.instruction_pool import Sample
 from pcrl.envs import make_vec_env
@@ -162,7 +163,7 @@ class OnPolicyTrainer(TrainerWarmStartMixin):
         self._eval_batch_size = self._train_eval_config["eval_batch_size"]
         self._n_iters = int(self._train_eval_config["n_iters"])
         self._sample_k = self._alg_config['args']['sample_k']
-        self._n_steps_per_iter = 10#len(self._tasks["train"])/3 #TODO remove the comment symbol
+        self._n_steps_per_iter = len(self._tasks["train"]) * self._max_episode_length
 
          # gen kwargs for evaluation (if it is different from training gen kwargs)
         self._eval_gen_kwargs = self._train_eval_config.get(
@@ -184,13 +185,13 @@ class OnPolicyTrainer(TrainerWarmStartMixin):
                                 gen_kwargs=self._eval_gen_kwargs)
         time.sleep(10)
 
-    def train_and_eval(self):
-        # evaluate on val and test set before fine-tuning once
+def train_and_eval(self):
         iter_start = self._trainer_state["current_iter"]
         # self._evaluate_on_datapools(epoch=iter_start)
 
-        # train for given number of iters
-        for epoch in range(iter_start, self._n_iters):
+        # ОБЕРТЫВАЕМ ЦИКЛ В TQDM ДЛЯ ИДЕАЛЬНОГО ПРОГРЕСС-БАРА
+        for epoch in tqdm(range(iter_start, self._n_iters), desc="🚀 PCRL Training", unit="epoch"):
+            
             # current state
             self._trainer_state["current_iter"] = epoch
 

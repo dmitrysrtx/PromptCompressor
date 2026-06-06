@@ -1,26 +1,27 @@
-from collections import defaultdict
-from typing import Dict, Any, List
-from transformers import AutoModel
-from rich.logging import RichHandler
-import os
-import json
-import jsonlines
-import wandb
-import pandas as pd
-import logging
 import copy
+import json
+import logging
+import os
 import random
+from collections import defaultdict
+from typing import Any, Dict, List
+import jsonlines
+import pandas as pd
+from rich.logging import RichHandler
+from transformers import AutoModel
+import wandb
 
 class Tracker:
-    def __init__(self,
-                 base_path_to_store_results: str,
-                 run_config: Dict[str, Any],
-                 project_name: str,
-                 experiment_name: str,
-                 entity_name: str = None,
-                 wandb_log: bool = False,
-                 log_level: int = logging.DEBUG,
-        ):
+    def __init__(
+        self,
+        base_path_to_store_results: str,
+        run_config: Dict[str, Any],
+        project_name: str,
+        experiment_name: str,
+        entity_name: str = None,
+        wandb_log: bool = False,
+        log_level: int = logging.DEBUG,
+    ):
         self._log_level = log_level
         self._base_path_to_store_results = base_path_to_store_results
         self._config = run_config
@@ -31,30 +32,42 @@ class Tracker:
         self._init()
 
     def _init(self):
-        # create a folder
         self._run_path = os.path.join(
             self._base_path_to_store_results,
             self._project_name,
-            self._experiment_name)
+            self._experiment_name,
+        )
         os.makedirs(self._run_path, exist_ok=True)
 
-        # store also the config into it
         config_path = os.path.join(self._run_path, "config.json")
         with open(config_path, "w") as fp:
             json.dump(self._config, fp)
 
-        # init logger
+        # -----------------------------------------------------
+        # Silent of terminal
+        # -----------------------------------------------------
         log_path = os.path.join(self._run_path, "log.txt")
-        logging.basicConfig(
-            level=self._log_level,
-            format="%(asctime)s [%(levelname)s] %(message)s",
-            handlers=[
-                logging.FileHandler(log_path),
-                RichHandler()
-            ]
-        )
+        root_logger = logging.getLogger()
+        root_logger.setLevel(self._log_level)
+        root_logger.handlers = [] 
 
-        # init wandb
+        # 1. All data is written to log.txt
+        file_handler = logging.FileHandler(log_path)
+        file_handler.setLevel(self._log_level)
+        file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+        root_logger.addHandler(file_handler)
+
+        # 2. Console prints errors ONLY (WARNING and above)
+        console_handler = RichHandler()
+        console_handler.setLevel(logging.WARNING)
+        root_logger.addHandler(console_handler)
+
+        # system spam disable
+        logging.getLogger("urllib3").setLevel(logging.WARNING)
+        logging.getLogger("git").setLevel(logging.WARNING)
+        logging.getLogger("transformers").setLevel(logging.WARNING)
+        logging.getLogger("datasets").setLevel(logging.WARNING)
+
         if self._wandb_log:
             self._wandb_run = wandb.init(
                 entity=self._entity_name,
