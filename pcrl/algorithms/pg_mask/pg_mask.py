@@ -243,31 +243,31 @@ class MaskablePG(OnPolicyAlgorithm):
 
         self._tracker.log_training_infos(train_info)
 
-        # ====================================================================
-        # LIVE CONSOLE INDICATOR FOR JUPYTER/COLAB RUNTIMES
-        # ====================================================================
-        print("\n" + "="*50)
-        print(f"📊 PCRL TRAINING ITERATION | Total Timesteps: {self.num_timesteps}")
-        print("="*50)
-        if "train/loss" in train_info:
-          print(f"📉 Total Loss:        {train_info['train/loss']:.4f}")
-        if "train/policy_loss" in train_info:
-          print(f"🎯 Policy Loss:       {train_info['train/policy_loss']:.4f}")
-        if "train/entropy_loss" in train_info:
-          print(f"🎲 Entropy Loss:      {train_info['train/entropy_loss']:.4f}")
+        # # ====================================================================
+        # # LIVE CONSOLE INDICATOR FOR JUPYTER/COLAB RUNTIMES
+        # # ====================================================================
+        # print("\n" + "="*50)
+        # print(f"📊 PCRL TRAINING ITERATION | Total Timesteps: {self.num_timesteps}")
+        # print("="*50)
+        # if "train/loss" in train_info:
+        #   print(f"📉 Total Loss:        {train_info['train/loss']:.4f}")
+        # if "train/policy_loss" in train_info:
+        #   print(f"🎯 Policy Loss:       {train_info['train/policy_loss']:.4f}")
+        # if "train/entropy_loss" in train_info:
+        #   print(f"🎲 Entropy Loss:      {train_info['train/entropy_loss']:.4f}")
 
-        # Extract execution metrics directly from the Stable-Baselines3 logger
-        fps = self.logger.name_to_value.get("time/fps", 0)
-        ep_rew = self.logger.name_to_value.get("rollout/ep_rew_mean", None)
+        # # Extract execution metrics directly from the Stable-Baselines3 logger
+        # fps = self.logger.name_to_value.get("time/fps", 0)
+        # ep_rew = self.logger.name_to_value.get("rollout/ep_rew_mean", None)
 
-        if fps:
-          print(f"⚡ Performance:       {fps} FPS (frames/sec)")
-        if ep_rew is not None:
-          print(f"🏆 Mean Reward:       {ep_rew:.4f}")
-        else:
-          print("⏳ Rollout collection for the current iteration completed...")
-        print("="*50 + "\n")
-        # ====================================================================
+        # if fps:
+        #   print(f"⚡ Performance:       {fps} FPS (frames/sec)")
+        # if ep_rew is not None:
+        #   print(f"🏆 Mean Reward:       {ep_rew:.4f}")
+        # else:
+        #   print("⏳ Rollout collection for the current iteration completed...")
+        # print("="*50 + "\n")
+        # # ====================================================================
 
     def learn(
         self,

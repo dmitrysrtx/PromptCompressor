@@ -65,7 +65,7 @@ def evaluate_on_samples(
     
     fixed_token_counts = get_fixed_token_counts(gen_tokenizer)
     #fixed_token_len = len(fixed_token_counts['instruction'] + fixed_token_counts['input'] + fixed_token_counts['output'])
-    for batch in tqdm(list(get_batch(samples, batch_size)), desc="Evaluating"):
+    for batch in tqdm(list(get_batch(samples, batch_size)), desc="Evaluating", disable=True):
         #compress prompt
         observations = obs_space.observation(batch)
         action_masks = list_in_dict_map(act_space.action_mask, observations)
