@@ -109,10 +109,21 @@ class CombineRewardFunction(RewardFunction):
 
     def __init__(self, lamb: float, threshold: float, rouge_type: str) -> None:
         super().__init__()
-        self._metric = evaluate.load("rouge", keep_in_memory=True)
         self._lambda = lamb
         self._threshold = threshold
         self._rouge_type = rouge_type
+
+        # ==========================================
+        # 🔥 SMART METRIC SELECTOR (BLEU or ROUGE)
+        # ==========================================
+        if self._rouge_type.lower() == "bleu":
+            # Используем твой кастомный класс для кода
+            self._bleu_scorer = BleuRewardFunction(coef=1.0)
+            self._metric = None
+        else:
+            # Загружаем классический ROUGE от HuggingFace
+            self._metric = evaluate.load("rouge", keep_in_memory=True)
+            self._bleu_scorer = None
 
     def get_compress_ratio(
         self,
@@ -139,13 +150,24 @@ class CombineRewardFunction(RewardFunction):
         gen_output: Dict[str, Any],
         fixed_tokens_dict: Dict[str, Any],
     ) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
-        similarity = np.array(
-            self._metric.compute(
-                predictions=extract_values(infos, "base_gen_texts"),
-                references=gen_output["gen_texts"],
-                use_aggregator=False,
-            )[self._rouge_type]
-        )
+        
+        preds = extract_values(infos, "base_gen_texts")
+        refs = gen_output["gen_texts"]
+
+        # ==========================================
+        # 🔥 CALCULATION ROUTING
+        # ==========================================
+        if self._rouge_type.lower() == "bleu":
+            # BleuRewardFunction уже возвращает np.ndarray
+            similarity = self._bleu_scorer(generated_texts=preds, reference_texts=refs)
+        else:
+            similarity = np.array(
+                self._metric.compute(
+                    predictions=preds,
+                    references=refs,
+                    use_aggregator=False,
+                )[self._rouge_type]
+            )
 
         compress_rate = self.get_compress_ratio(
             infos, gen_output["compressed_token_counts"], fixed_tokens_dict
