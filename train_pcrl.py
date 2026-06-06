@@ -51,6 +51,39 @@ def main(
         train_eval_config=config["train_evaluation"],
         tracker=tracker,
     )
+
+    # ==========================================
+    # 🔥 WARM START OR FROM SCRATCH LOGIC
+    # ==========================================
+    # Get the path from config. Default to empty string if not found.
+    warm_start_path = config.get("alg", {}).get("args", {}).get("warm_start_path", "")
+    
+    # Check if a valid path was provided in the YAML
+    if warm_start_path and isinstance(warm_start_path, str) and warm_start_path.strip() != "":
+        # Check if the file/folder actually exists on the disk
+        if os.path.exists(warm_start_path) or os.path.exists(warm_start_path + ".zip"):
+            print(f"\n🚀 INITIALIZING WARM START...")
+            print(f"📥 Loading agent weights from: {warm_start_path}")
+            
+            # Safely extract the algorithm object (SB3 MaskablePG)
+            alg = getattr(trainer, 'alg', getattr(trainer, '_alg', getattr(trainer, 'model', None)))
+            
+            if alg is not None:
+                try:
+                    alg.set_parameters(warm_start_path)
+                    print("✅ Weights loaded successfully! Agent will continue training.\n")
+                except Exception as e:
+                    print(f"❌ Error loading SB3 weights: {e}")
+                    print("⚠️  Proceeding with training from scratch as a fallback.\n")
+            else:
+                print("❌ Error: Could not find the algorithm object inside OnPolicyTrainer.")
+        else:
+             print(f"\n❌ Error: Path '{warm_start_path}' does not exist.")
+             print("⚠️  Proceeding with training FROM SCRATCH.\n")
+    else:
+        print("\n🌱 INITIALIZING TRAINING FROM SCRATCH (No warm start path provided).\n")
+    # ==========================================
+    
     trainer.train_and_eval()
 
 

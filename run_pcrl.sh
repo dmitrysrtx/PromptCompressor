@@ -23,5 +23,5 @@ source /content/env39/bin/activate
 python train_pcrl.py \
     --config_path configs/gpt2-xl-code.yml \
     --project_name PromptCompressor_code_RL \
-    --experiment_name gpt2_xl_code_v3_bleu_512 \
+    --experiment_name gpt2_xl_code_v1_bleu_512 \
     --log_to_wandb

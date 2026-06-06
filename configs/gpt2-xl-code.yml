@@ -1,5 +1,5 @@
 gen_model:
-  model_name: "/content/drive/MyDrive/StudiesAI/RL/PromptCompressor/PromptCompressor_code_RL/gpt2_xl_code_v3_n32/checkpoints/checkpoint_19"
+  model_name: gpt2-xl-code-finetuned
   apply_model_parallel: True
   tokenizer:
     model_name: gpt2-xl-code-finetuned
@@ -36,6 +36,7 @@ env:
 alg:
   id: pg_mask
   args:
+    # warm_start_path: "/content/drive/MyDrive/StudiesAI/RL/PromptCompressor/PromptCompressor_code_RL/gpt2_xl_code_v3_n32/checkpoints/checkpoint_19"
     sample_k: 4
     use_scst: true
     n_steps: 1
