@@ -14,9 +14,9 @@ gen_model:
 reward_fn:
   id: combine
   args:
-    threshold: 0.9
-    lamb: -0.01
-    rouge_type: rougeL
+    threshold: 0.8
+    lamb: -0.05
+    rouge_type: rouge2
 
 datapool:
   id: code_alpaca

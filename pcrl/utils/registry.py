@@ -6,14 +6,20 @@ from stable_baselines3.common.policies import BasePolicy
 from data.instruction_pool import DataPool, AlpacaPlus, CodeAlpaca, GPTeacher
 from pcrl.algorithms import MaskablePG, MaskableA2C, MaskablePPO
 from pcrl.utils.alg_wrappers import wrap_onpolicy_alg
+from pcrl.envs.act_spaces import BaseActSpace, BatchFixedTokenAction
+from pcrl.envs.obs_spaces import BaseObsSpace, FixedTokenObservation, FixedWordObservation
+from pcrl.envs.reward import (
+    RewardFunction,
+    MeteorRewardFunction,
+    RougeRewardFunction,
+    CombineRewardFunction,
+    BleuRewardFunction,
+    )
 from pcrl.utils.metric import (
     BaseMetric,
     Rouge_C,
     Rouge_R,
-)
-from pcrl.envs.act_spaces import BaseActSpace, BatchFixedTokenAction
-from pcrl.envs.obs_spaces import BaseObsSpace, FixedTokenObservation, FixedWordObservation
-from pcrl.envs.reward import RewardFunction, MeteorRewardFunction, RougeRewardFunction, CombineRewardFunction
+    )
 from pcrl.model.policy import BatchTokenPolicy
 
 
@@ -26,7 +32,12 @@ class DataPoolRegistry:
     @classmethod
     def get(cls, datapool_id: str, kwargs: Dict[str, Any]):
         datapool_cls = cls._registry[datapool_id]
-        datapool = datapool_cls.prepare(**kwargs)
+
+        # Cleanup system 'path'
+        clean_kwargs = kwargs.copy()
+        clean_kwargs.pop('path', None)
+
+        datapool = datapool_cls.prepare(**clean_kwargs)
         return datapool
 
     @classmethod
@@ -71,6 +82,7 @@ class RewardFunctionRegistry:
         "meteor": MeteorRewardFunction,
         "rouge": RougeRewardFunction,
         "combine": CombineRewardFunction,
+        "bleu": BleuRewardFunction,
     }
 
     @classmethod
