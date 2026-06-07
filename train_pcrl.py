@@ -42,6 +42,8 @@ def main(
         log_to_wandb,
     )
 
+    warm_start_path = config.get("alg", {}).get("args", {}).pop("warm_start_path", "")
+    
     trainer = OnPolicyTrainer(
         gen_config=config["gen_model"],
         datapool_config=config["datapool"],

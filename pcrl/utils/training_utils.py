@@ -189,7 +189,6 @@ class OnPolicyTrainer(TrainerWarmStartMixin):
         iter_start = self._trainer_state["current_iter"]
         # self._evaluate_on_datapools(epoch=iter_start)
 
-        # ОБЕРТЫВАЕМ ЦИКЛ В TQDM ДЛЯ ИДЕАЛЬНОГО ПРОГРЕСС-БАРА
         for epoch in tqdm(range(iter_start, self._n_iters), desc="🚀 PCRL Training", unit="epoch"):
             
             # current state
