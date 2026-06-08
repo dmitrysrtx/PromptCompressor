@@ -16,6 +16,8 @@ def set_seed_everywhere(seed):
     np.random.seed(seed)
     random.seed(seed)
 
+
+
 def main(
     config_path: str,
     project_name: str,
@@ -24,6 +26,7 @@ def main(
     entity_name: str,
     log_to_wandb: bool, 
     seed: int,
+    warm_start_path: str,
 ):
 
     # load the config file
@@ -42,8 +45,8 @@ def main(
         log_to_wandb,
     )
 
-    warm_start_path = config.get("alg", {}).get("args", {}).pop("warm_start_path", "")
-    
+    config.get("alg", {}).get("args", {}).pop("warm_start_path", None)
+
     trainer = OnPolicyTrainer(
         gen_config=config["gen_model"],
         datapool_config=config["datapool"],
@@ -57,25 +60,25 @@ def main(
     # ==========================================
     # 🔥 WARM START OR FROM SCRATCH LOGIC
     # ==========================================
-    # Get the path from config. Default to empty string if not found.
-    warm_start_path = config.get("alg", {}).get("args", {}).get("warm_start_path", "")
     
-    # Check if a valid path was provided in the YAML
     if warm_start_path and isinstance(warm_start_path, str) and warm_start_path.strip() != "":
-        # Check if the file/folder actually exists on the disk
         if os.path.exists(warm_start_path) or os.path.exists(warm_start_path + ".zip"):
             print(f"\n🚀 INITIALIZING WARM START...")
             print(f"📥 Loading agent weights from: {warm_start_path}")
             
-            # Safely extract the algorithm object (SB3 MaskablePG)
             alg = getattr(trainer, 'alg', getattr(trainer, '_alg', getattr(trainer, 'model', None)))
             
             if alg is not None:
                 try:
-                    alg.set_parameters(warm_start_path)
-                    print("✅ Weights loaded successfully! Agent will continue training.\n")
+                    # 1. Read binary file PyTorch (raw data)
+                    state_dict = torch.load(warm_start_path, map_location=alg.device, weights_only=False)
+                    
+                    # 2. Insert matrixes directly (strict=False saves from added/removed layers)
+                    alg.policy.load_state_dict(state_dict, strict=False)
+                    
+                    print("✅ PyTorch Raw Weights loaded successfully! Agent will continue training.\n")
                 except Exception as e:
-                    print(f"❌ Error loading SB3 weights: {e}")
+                    print(f"❌ Error loading PyTorch weights: {e}")
                     print("⚠️  Proceeding with training from scratch as a fallback.\n")
             else:
                 print("❌ Error: Could not find the algorithm object inside OnPolicyTrainer.")
@@ -84,8 +87,7 @@ def main(
              print("⚠️  Proceeding with training FROM SCRATCH.\n")
     else:
         print("\n🌱 INITIALIZING TRAINING FROM SCRATCH (No warm start path provided).\n")
-    # ==========================================
-    
+            
     trainer.train_and_eval()
 
 
@@ -116,7 +118,20 @@ if __name__ == "__main__":
     parser.add_argument(
         "--seed", type=int, help="random seed to use", default=2023
     )
+    parser.add_argument(
+        "--warm_start_path", type=str, default="", help="Path to the SB3 checkpoint")
     args = parser.parse_args()
+
+    # ==========================================
+    # 🛠️ DEBUG PART
+    # ==========================================
+    print("\n" + "="*50)
+    print("🛠️ DEBUG: Parameters from args (sys.argv):")
+    for arg in sys.argv:
+        print(f"   {arg}")
+    print(f"🛠️ DEBUG: what parser sees (args.warm_start_path): '{args.warm_start_path}'")
+    print("="*50 + "\n")
+    # ==========================================
 
     main(
         args.config_path,
@@ -126,4 +141,5 @@ if __name__ == "__main__":
         args.entity_name,
         args.log_to_wandb,
         args.seed,
+        args.warm_start_path,
     )
