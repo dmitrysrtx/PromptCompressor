@@ -1,7 +1,6 @@
-from datasets import load_dataset
+from datasets import load_dataset, DatasetDict
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 from tqdm import tqdm
-from data.instruction_pool import FIXED_TOKENS, get_fixed_token_counts
 from data.instruction_pool import FIXED_TOKENS, get_fixed_token_counts
 from pcrl.utils.training_utils import build_env, build_tokenizer
 from pcrl.envs.act_spaces import BatchFixedTokenAction
@@ -20,15 +19,15 @@ nltk.download("stopwords")
 
 MODEL_ALIAS = {
     "gpt2-xl": "gpt2-xl-finetuned_alpaca",
+    "gpt2-xl-code": "gpt2-xl-code-finetuned",
     "flan-t5-xl": "flan-t5-xl-finetuned_alpaca",
     "llama2": "meta-llama/Llama-2-7b-chat-hf",
     "flan-t5-xxl": "google/flan-t5-xxl",
     "falcon": "tiiuae/falcon-7b-instruct"
 }
 
-
 def get_exp_type(gen_model:str):
-    if gen_model in ["gpt2-xl", "flan-t5-xl"]:
+    if gen_model in ["gpt2-xl", "gpt2-xl-code", "flan-t5-xl"]:
         return "instruction"
     elif gen_model in ["llama2", "flan-t5-xxl", "falcon"]:
         return "transfer"
@@ -41,7 +40,6 @@ def concat_instruction_input_for_validation(examples):
     else:
         source = FIXED_TOKENS["instruction"] + examples['instruction'] + FIXED_TOKENS["output"]
     return {"text" : source}
-
 
 def get_fixed_token_len(texts, fixed_token_counts):
     if isinstance(texts, str):
@@ -65,13 +63,34 @@ def eval_pcrl(args):
         os.makedirs(directory)
     summary = "summary.csv"
 
+    # Load metrics
     rouge = evaluate.load('rouge')
-    # Load the dataset
-    dataset = load_dataset("data/alpaca_plus.py")
+    bleu = evaluate.load('bleu')
+    
+    # ---------------------------------------------------------
+    # CUSTOM DATASET LOADER FOR CODE ALPACA
+    # ---------------------------------------------------------
+    print("\n[INFO] Downloading and formatting CodeAlpaca dataset...")
+    raw_dataset = load_dataset("sahil2801/CodeAlpaca-20k")["train"]
+
+    main_split = raw_dataset.train_test_split(test_size=2000, seed=seed)
+    eval_split = main_split["test"].train_test_split(test_size=1000, seed=seed)
+    sub_val_split = eval_split["test"].train_test_split(test_size=500, seed=seed)
+    
+    # Assemble into a standard DatasetDict format
+    # Limit human split to 500 to match the others
+    dataset = DatasetDict({
+        "validation_seen": sub_val_split["train"],
+        "validation_unseen": sub_val_split["test"],
+        "validation_human": eval_split["train"].select(range(500)) 
+    })
+    print("[INFO] Dataset successfully split! Size of each split: 500 rows.\n")
+    # ---------------------------------------------------------
+
     bs = args.bs
 
     model_cls = AutoModelForSeq2SeqLM if "t5" in gen_model_name else AutoModelForCausalLM
-    gen_model = model_cls.from_pretrained(gen_model_name, device_map='auto', cache_dir=".", trust_remote_code=True)#, pad_token_id = tokenizer.pad_token_id)
+    gen_model = model_cls.from_pretrained(gen_model_name, device_map='auto', torch_dtype=torch.bfloat16, cache_dir=".", trust_remote_code=True)
     device = "cuda"
 
     config_path = f'configs/{pcrl_model_name}.yml'
@@ -100,8 +119,35 @@ def eval_pcrl(args):
     obs_space = env.get_attr('obs_space')[0]
     act_space = env.get_attr('act_space')[0]
 
-    checkpoint = 2 if "t5" in pcrl_model_name else 3
-    model_pt_path = f"{pcrl_model_name}_{seed}/checkpoints/checkpoint_{checkpoint}"
+    # --- FIXED: Robust path resolution for checkpoints ---
+    # We look for the folder that matches the pcrl_model_name provided in arguments
+    # Checking if the folder exists in the current directory or a specific path
+    base_model_path = pcrl_model_name
+    
+    # If the folder exists directly, use it, otherwise look for standard naming convention
+    if os.path.exists(f"{base_model_path}_{seed}/checkpoints"):
+        checkpoint_dir = f"{base_model_path}_{seed}/checkpoints"
+    elif os.path.exists(f"{base_model_path}/checkpoints"):
+        checkpoint_dir = f"{base_model_path}/checkpoints"
+    else:
+        # Fallback to current directory if structure is different
+        checkpoint_dir = "./checkpoints"
+        
+    print(f"[INFO] Looking for checkpoints in: {checkpoint_dir}")
+    # -----------------------------------------------------
+    
+    if args.checkpoint != -1:
+        checkpoint = args.checkpoint
+    else:
+        if os.path.exists(checkpoint_dir):
+            # Choosing the last checkpoint automatically
+            ckpt_nums = [int(f.split('_')[1]) for f in os.listdir(checkpoint_dir) if f.startswith('checkpoint_')]
+            checkpoint = max(ckpt_nums) if ckpt_nums else (2 if "t5" in pcrl_model_name else 3)
+        else:
+            checkpoint = 2 if "t5" in pcrl_model_name else 3
+            
+    model_pt_path = f"{checkpoint_dir}/checkpoint_{checkpoint}"
+    print(f"[INFO] Successfully loading checkpoint: {model_pt_path}\n")
     
     state_dict = torch.load(model_pt_path, map_location=torch.device("cuda"))
     policy = BatchTokenPolicy(
@@ -109,17 +155,20 @@ def eval_pcrl(args):
         env.action_space,
         None,
         policy_args['model_name'],
-    ).to(device=device)
+    ).to(device=device, dtype=torch.bfloat16)
     policy.load_from_dict(state_dict=state_dict["policy_state"])
 
     for split in ["validation_seen", "validation_unseen", "validation_human"]:
         org_df = pd.read_csv(f"{results_folder}/{eval_type}/original/{args.gen_model}_{split}_wth.csv")
         dataset_split = dataset[split].map(concat_instruction_input_for_validation, batched=False, num_proc=8)
+        
+        # Dictionary to store results, updated with BLEU support
         results = {"prompt": [],
                    "tokens" : [],
                    "gen_texts": [],
                    "token_counts": [],
-                   "rouge_L": []}
+                   "rouge_L": [],
+                   "bleu": []}
 
         for i in tqdm(range(math.ceil(len(dataset_split)/bs))):
             if "falcon" in gen_model_name:
@@ -140,21 +189,24 @@ def eval_pcrl(args):
             new_obs = [act_space.process_actions({k:obs[k][i] for k in obs.keys()}, action[i]) for i in range(b)]
             new_obs = {k:np.array([new_obs[i]['input_ids'] for i in range(b)]).astype(np.int32) for k in obs.keys()}
             
-            #org_token_counts = [len(tokens) for tokens in gen_tokenizer(subset['texts'])['input_ids']]
-            #results["org_token_counts"] += org_token_counts
             comp_texts = model_tokenizer.batch_decode(new_obs['input_ids'], skip_special_tokens=True)
     
-
             if bs == 1:
-                gen_encodings = gen_tokenizer(comp_texts, return_tensors='pt', max_length=512, truncation=True, return_attention_mask=True)
+                gen_encodings = gen_tokenizer(comp_texts,
+                                              return_tensors='pt',
+                                              max_length=512,
+                                              truncation=True,
+                                              return_attention_mask=True,
+                )
+                                            
             else:
-                gen_encodings = gen_tokenizer(comp_texts, 
-                                return_tensors='pt',
-                                max_length=512,
-                                padding="max_length",
-                                truncation=True,
-                                return_attention_mask=True,
-                            )
+                gen_encodings = gen_tokenizer(comp_texts,
+                                              return_tensors='pt',
+                                              max_length=512,
+                                              padding="max_length",
+                                              truncation=True,
+                                              return_attention_mask=True,
+                )
                 
             results["prompt"] += comp_texts
             results["tokens"] += [(input_id[input_id!=gen_tokenizer.pad_token_id]).tolist() for input_id in gen_encodings['input_ids']]
@@ -185,20 +237,31 @@ def eval_pcrl(args):
                     reference_len = len(gen_tokenizer(subset['output'][j])['input_ids'])
                     gen_text = gen_tokenizer.decode(output[:reference_len], skip_special_tokens=True)
                 results["gen_texts"].append(gen_text)
-        #    break
 
-        #results["rouge_L"] = rouge.compute(predictions=results["gen_texts"], references=dataset_split['output'][:bs], use_aggregator=False)['rougeL']
+        # --- Metrics calculation ---
         results["rouge_L"] = rouge.compute(predictions=results["gen_texts"], references=dataset_split['output'], use_aggregator=False)['rougeL']
+        
+        # Preparing BLEU data (requires a list of lists)
+        refs_for_bleu = [[ref] for ref in dataset_split['output']]
+        # Single BLEU-score calculation for the whole split
+        bleu_score = bleu.compute(predictions=results["gen_texts"], references=refs_for_bleu)['bleu']
+        # Copying values for length alignment of the Pandas DataFrame dictionary
+        results["bleu"] = [bleu_score] * len(results["gen_texts"])
+
         df = pd.DataFrame(results)
+        
+        # --- SUMMARY ---
         summ = pd.DataFrame({
             "id" : args.gen_model,
             "split" : split,
             "model" : pcrl_model_name,
             "rouge_l": df["rouge_L"].mean(),
+            "bleu": bleu_score, 
             "cr": (1 - df['token_counts']/org_df['token_counts']).mean(),
             "seed" : seed,
         }, index = [0] 
         )
+        
         if os.path.exists(summary):
             prev_summ = pd.read_csv(summary)
             summ = pd.concat([prev_summ, summ], axis=0)
@@ -206,17 +269,18 @@ def eval_pcrl(args):
         else:
             summ.to_csv(summary, index=False)
 
-        #TODO 임시로 10개만
+        # Saving detailed output
         df.to_csv(f"{directory}/{args.gen_model}_{split}.csv", index=False)
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--pcrl_model", type=str, default="gpt2-xl")
-    parser.add_argument("--seed", type=int, default=2023)
+    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--gen_model", type=str, default="falcon")
     parser.add_argument("--bs", type=int, default=1)
-    parser.add_argument("--results_dir", type=str, default="results2")
+    parser.add_argument("--results_dir", type=str, default="results")
+    parser.add_argument("--checkpoint", type=int, default=-1, help="Specific epoch checkpoint to load. Default is latest.")
 
     args = parser.parse_args()
 

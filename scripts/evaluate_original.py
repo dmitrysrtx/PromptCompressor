@@ -1,4 +1,4 @@
-from datasets import load_dataset
+from datasets import load_dataset, DatasetDict
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 from tqdm import tqdm
 from data.instruction_pool import FIXED_TOKENS, get_fixed_token_counts
@@ -9,8 +9,10 @@ import torch
 import evaluate
 import os 
 
+# --- UPDATED: Added our finetuned gpt2-xl-code model ---
 MODEL_ALIAS = {
     "gpt2-xl": "gpt2-xl-finetuned",
+    "gpt2-xl-code": "gpt2-xl-code-finetuned",
     "flan-t5-xl": "flan-t5-xl-finetuned",
     "llama2": "meta-llama/Llama-2-7b-chat-hf",
     "flan-t5-xxl": "google/flan-t5-xxl",
@@ -18,7 +20,8 @@ MODEL_ALIAS = {
 }
 
 def get_exp_type(gen_model:str):
-    if gen_model in ["gpt2-xl", "flan-t5-xl"]:
+    # --- UPDATED: Added gpt2-xl-code to instruction models ---
+    if gen_model in ["gpt2-xl", "gpt2-xl-code", "flan-t5-xl"]:
         return "instruction"
     elif gen_model in ["llama2", "flan-t5-xxl", "falcon"]:
         return "transfer"
@@ -50,9 +53,30 @@ def eval_original(args):
         os.makedirs(directory)
     summary = "summary.csv"
 
+    # --- UPDATED: Load both ROUGE and BLEU metrics ---
     rouge = evaluate.load('rouge')
-    # Load the dataset
-    dataset = load_dataset("data/alpaca_plus.py")
+    bleu = evaluate.load('bleu')
+    
+    # ---------------------------------------------------------
+    # CUSTOM DATASET LOADER FOR CODE ALPACA
+    # ---------------------------------------------------------
+    print("\n[INFO] Downloading and formatting CodeAlpaca dataset...")
+    raw_dataset = load_dataset("sahil2801/CodeAlpaca-20k")["train"]
+    
+    seed = 42
+    main_split = raw_dataset.train_test_split(test_size=2000, seed=seed)
+    eval_split = main_split["test"].train_test_split(test_size=1000, seed=seed)
+    sub_val_split = eval_split["test"].train_test_split(test_size=500, seed=seed)
+    
+    # Assemble into a standard DatasetDict format
+    # Limit human split to 500 to match the others
+    dataset = DatasetDict({
+        "validation_seen": sub_val_split["train"],
+        "validation_unseen": sub_val_split["test"],
+        "validation_human": eval_split["train"].select(range(500)) 
+    })
+    print("[INFO] Dataset successfully split! Size of each split: 500 rows.\n")
+    # ---------------------------------------------------------
 
     gen_model_name = MODEL_ALIAS[args.gen_model]
     bs = args.bs
@@ -66,17 +90,20 @@ def eval_original(args):
 
     # Load the model
     model_cls = AutoModelForSeq2SeqLM if "t5" in gen_model_name else AutoModelForCausalLM
-    gen_model = model_cls.from_pretrained(gen_model_name, device_map = 'auto', cache_dir=".", trust_remote_code=True)
+    gen_model = model_cls.from_pretrained(gen_model_name, device_map = 'auto', torch_dtype=torch.bfloat16, cache_dir=".", trust_remote_code=True)
 
     fixed_token_counts = get_fixed_token_counts(gen_tokenizer)
 
     for split in ["validation_seen", "validation_unseen", "validation_human"]:
         dataset_split = dataset[split].map(concat_instruction_input_for_validation, batched=False, num_proc=8)
+        
+        # --- UPDATED: Added "bleu" key to the results dictionary ---
         results = {"prompt": [],
                    "tokens" : [],
                    "gen_texts": [],
                    "token_counts": [],
-                   "rouge_L": []}
+                   "rouge_L": [],
+                   "bleu": []}
 
         for i in tqdm(range(math.ceil(len(dataset_split)/bs))):
             subset = dataset_split[bs*i:bs*(i+1)]
@@ -121,13 +148,26 @@ def eval_original(args):
                     gen_text = gen_tokenizer.decode(output[:reference_len], skip_special_tokens=True)
                 results["gen_texts"].append(gen_text)
         
+        # --- METRICS CALCULATION ---
         results["rouge_L"] = rouge.compute(predictions=results["gen_texts"], references=dataset_split['output'], use_aggregator=False)['rougeL']
+        
+        # Format references for BLEU (requires a list of lists)
+        refs_for_bleu = [[ref] for ref in dataset_split['output']]
+        # Compute the overall BLEU score for the current split
+        bleu_score = bleu.compute(predictions=results["gen_texts"], references=refs_for_bleu)['bleu']
+        # Duplicate the score to match the array length for Pandas DataFrame
+        results["bleu"] = [bleu_score] * len(results["gen_texts"])
+        # ---------------------------
+
         df = pd.DataFrame(results)
+        
+        # --- UPDATED: Added bleu to the summary output ---
         summ = pd.DataFrame({
             "id" : args.gen_model,
             "split" : split,
             "model" : "original",
             "rouge_l": df["rouge_L"].mean(),
+            "bleu": bleu_score,
             "cr": 0,
             "seed": 0
         }, index = [0] 
