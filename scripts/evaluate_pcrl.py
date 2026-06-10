@@ -93,7 +93,7 @@ def eval_pcrl(args):
     gen_model = model_cls.from_pretrained(gen_model_name, device_map='auto', torch_dtype=torch.bfloat16, cache_dir=".", trust_remote_code=True)
     device = "cuda"
 
-    config_path = f'configs/{pcrl_model_name}.yml'
+    config_path = f'configs/{args.config_name}.yml'
     with open(config_path, "r") as fp:
         config = yaml.safe_load(fp)
 
@@ -149,7 +149,7 @@ def eval_pcrl(args):
     model_pt_path = f"{checkpoint_dir}/checkpoint_{checkpoint}"
     print(f"[INFO] Successfully loading checkpoint: {model_pt_path}\n")
     
-    state_dict = torch.load(model_pt_path, map_location=torch.device("cuda"))
+    state_dict = torch.load(model_pt_path, map_location=torch.device("cuda"), weights_only=False)
     policy = BatchTokenPolicy(
         env.observation_space,
         env.action_space,
@@ -176,11 +176,11 @@ def eval_pcrl(args):
             subset = dataset_split[bs*i:bs*(i+1)]
             b = len(subset['text'])
             model_encodings = model_tokenizer(subset['text'], max_length=512, padding="max_length", truncation=True, return_tensors="pt")
-            is_irrel = np.stack([obs_space.is_irrel_token(b) for b in model_encodings.input_ids])
+            # is_irrel = np.stack([obs_space.is_irrel_token(b) for b in model_encodings.input_ids])
             obs = {
                 "input_ids": np.array(model_encodings.input_ids),
                 "attention_mask": np.array(model_encodings.attention_mask),
-                "is_irrel": is_irrel,
+                # "is_irrel": is_irrel,
             }
 
             action_masks = np.stack([act_space.action_mask({k:obs[k][i] for k in obs.keys()}) for i in range(b)])
@@ -277,6 +277,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--pcrl_model", type=str, default="gpt2-xl")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--config_name", type=str, default="gpt2-xl-code", help="Name of the YAML config file in configs/ directory")
     parser.add_argument("--gen_model", type=str, default="falcon")
     parser.add_argument("--bs", type=int, default=1)
     parser.add_argument("--results_dir", type=str, default="results")
