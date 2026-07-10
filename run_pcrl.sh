@@ -1,23 +1,23 @@
 #!/bin/bash
 
-# Переходим в рабочую директорию проекта
-cd /content/drive/MyDrive/StudiesAI/RL/PromptCompressor || { echo "❌ Ошибка: Не удалось перейти в директорию проекта"; exit 1; }
+# Navigate to the project working directory
+cd /content/drive/MyDrive/StudiesAI/RL/PromptCompressor || { echo "❌ Error: Failed to navigate to project directory"; exit 1; }
 
-# 1. Системные флаги вывода
+# 1. System output flags
 export PYTHONUNBUFFERED=1
 export MPLBACKEND="Agg"
 
-# 2. Переводим Hugging Face в ОНЛАЙН режим (удаляем или меняем на 0)
+# 2. Set Hugging Face to ONLINE mode (remove or set to 0)
 export HF_DATASETS_OFFLINE=0
 export TRANSFORMERS_OFFLINE=0
 
-# 3. Бронебойный флаг для WandB ОСТАВЛЯЕМ В ОФЛАЙНЕ!
-# Именно он защищает от зависаний на авторизации
+# 3. Keep WandB flag ONLINE!
+# This is what protects against hangs during authorization
 export WANDB_MODE="online"
 
-echo "🚀 Запуск PCRL в полностью изолированном автономном режиме из терминала..."
+echo "🚀 Launching PCRL in fully isolated offline mode from terminal..."
 
-# 4. Активируем виртуальную среду и запускаем Python напрямую
+# 4. Activate virtual environment and run Python directly
 source /content/env39/bin/activate
 
 python train_pcrl.py \
